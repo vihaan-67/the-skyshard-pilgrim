@@ -1,36 +1,56 @@
+import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
 
 export class GravitySystem {
-    constructor(fieldCenter = new CANNON.Vec3(0, 0, 0), strength = 9.82) {
-        this.center = fieldCenter
-        this.strength = strength
-        this.mode = 'global' // 'global', 'point', 'zero'
-        this.globalVector = new CANNON.Vec3(0, -9.82, 0)
+    constructor(physicsWorld) {
+        this.physicsWorld = physicsWorld
+        this.gravityWells = []
+        this.globalGravity = new CANNON.Vec3(0, -9.82, 0)
     }
 
-    setMode(mode) {
-        this.mode = mode
+    addGravityWell(position, force, radius) {
+        this.gravityWells.push({ position, force, radius })
     }
 
+    getGravityAt(position) {
+        // Start with global gravity if no wells are near? 
+        // Or should wells override global gravity? 
+        // Let's say wells override if inside radius.
+
+        // Check for nearest well
+        let netGravity = this.globalGravity.clone()
+        let maxInfluence = 0
+
+        for (const well of this.gravityWells) {
+            const dist = position.distanceTo(well.position)
+
+            if (dist < well.radius) {
+                // Inside a well!
+                // Calculate direction towards center
+                const direction = new CANNON.Vec3()
+                well.position.vsub(position, direction)
+                direction.normalize()
+
+                // Linear falloff or constant? Let's go constant for consistent "planet" feel
+                // Or maybe smooth blend?
+
+                // Let's simply replace global gravity with local gravity for now for stability
+                // "Point Attractor"
+                const localGravity = direction.scale(well.force)
+
+                // Blend based on distance to edge?
+                // For this prototype, if you are in a well, that is your gravity.
+                return localGravity
+            }
+        }
+
+        return netGravity
+    }
+
+    // Apply gravity to all registered bodies?
+    // Cannon applies global gravity automatically. We need to disable that for per-body gravity.
     applyGravity(body) {
-        if (this.mode === 'zero') {
-            body.force.set(0, 0, 0)
-            return
-        }
-
-        if (this.mode === 'global') {
-            // Cannon handles global gravity automatically via world.gravity, 
-            // but for custom per-object gravity we might need to apply it manually if we disable world gravity.
-            // For now, let's assume world gravity handles global mode.
-            return
-        }
-
-        if (this.mode === 'point') {
-            const direction = new CANNON.Vec3()
-            this.center.vsub(body.position, direction)
-            direction.normalize()
-            const force = direction.scale(this.strength * body.mass)
-            body.force.vadd(force, body.force)
-        }
+        const gravity = this.getGravityAt(body.position)
+        body.force.vadd(gravity.scale(body.mass), body.force)
     }
 }

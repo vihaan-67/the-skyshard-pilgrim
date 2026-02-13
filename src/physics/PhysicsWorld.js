@@ -7,7 +7,8 @@ export class PhysicsWorld {
         this.world.allowSleep = true
 
         // Default global gravity - can be overridden by GravitySystem
-        this.world.gravity.set(0, -9.82, 0)
+        // Default global gravity - set to 0 as we apply it manually per body
+        this.world.gravity.set(0, 0, 0)
 
         this.bodies = []
     }
@@ -25,7 +26,25 @@ export class PhysicsWorld {
         }
     }
 
-    update(deltaTime) {
+    update(deltaTime, gravitySystem) {
+        if (gravitySystem) {
+            // Apply custom gravity to all dynamic bodies
+            for (const body of this.bodies) {
+                if (body.type === CANNON.Body.DYNAMIC) {
+                    // Manual gravity application
+                    // We need to disable world gravity or counteract it?
+                    // Better: Set world gravity to 0 and apply manually.
+
+                    // Get gravity vector
+                    const force = gravitySystem.getGravityAt(body.position)
+
+                    // F = ma
+                    const gravityForce = force.scale(body.mass)
+                    body.force.vadd(gravityForce, body.force)
+                }
+            }
+        }
+
         this.world.step(1 / 60, deltaTime, 3)
     }
 }
